@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+
+<head>
+    <style>
+        div.tooltip {
+            position: absolute;
+            text-align: center;
+            padding: 2px;
+            font: 12px sans-serif;
+            background: lightsteelblue;
+            border: 0px;
+            border-radius: 8px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<title></title>
+
+<link href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" media="all" rel="stylesheet" />
+
+<body></body>
+<script src="https://d3js.org/d3.v5.min.js"></script>
+<script>
+ var div = d3.select("body").append("div")
+             .attr("class", "tooltip")
+             .style("opacity", 0);
+
+ const scale = d3.scaleOrdinal(d3.schemeCategory10);
+
+ d3.json("org-data.json")
+   .then(function(data) {
+       console.log(data)
+
+       function color(d) {
+           return scale(d.group);
+       }
+
+       function clicked(d) {
+           window.open(d.url);
+       }
+       var width = window.innerWidth,
+           height = window.innerHeight;
+       const links = data.links.map(d => Object.create(d));
+       const nodes = data.nodes.map(d => Object.create(d));
+
+       let simulation = d3.forceSimulation(nodes)
+                          .force("link", d3.forceLink(links).id(d => d.id).distance(0).strength(.5))
+                          .force("charge", d3.forceManyBody().strength(-100))
+                          .force("x", d3.forceX())
+                          .force("y", d3.forceY());
+
+       let drag = function(simulation) {
+           function dragstarted(d) {
+               if (!d3.event.active) simulation.alphaTarget(0.3).restart();
+               d.fx = d.x;
+               d.fy = d.y;
+           }
+
+           function dragged(d) {
+               d.fx = d3.event.x;
+               d.fy = d3.event.y;
+           }
+
+           function dragended(d) {
+               if (!d3.event.active) simulation.alphaTarget(0);
+               d.fx = null;
+               d.fy = null;
+           }
+
+           return d3.drag()
+                    .on("start", dragstarted)
+                    .on("drag", dragged)
+                    .on("end", dragended);
+       };
+
+
+       // Building svg
+       let svg = d3.select("body")
+                   .classed("svg-container", true)
+                   .append("svg")
+                   .attr("preserveAspectRatio", "xMinYMin meet")
+                   .attr("viewBox", [0, 0, width, height])
+                   .classed("svg-content-responsive", true);
+
+       svg = svg.merge(svg);
+
+       let g = svg.append("g")
+                  .attr("transform", `translate(${width / 2}, ${height / 2})`);
+
+       const link = g.append('g')
+                     .attr("stroke", "#999")
+                     .attr("stroke-opacity", 0.6)
+                     .selectAll("line")
+                     .data(links)
+                     .join("line")
+                     .attr("stroke-width", d => Math.sqrt(d.value));
+
+
+       const node = g
+           .attr("stroke", "#fff")
+           .attr("stroke-width", 1.5)
+           .selectAll("circle")
+           .data(nodes)
+           .join("circle")
+           .attr("r", 5)
+           .attr("fill", color)
+           .on("click", clicked)
+           .on("mouseover", function(d) {
+               div.html(`<div style='float: right'>${d.id}</div>`)
+                  .style("opacity", .9)
+                  .style('left', d3.event.pageX + 'px')
+                  .style('top', (d3.event.pageY - 28) + 'px')
+                  .style('border', 'solid 3px black')
+                  .style('background-color', 'white')
+                  .style('border-radius', '10px')
+                  .style('float', 'left')
+                  .style('font-family', 'monospace');
+           })
+           .on("mouseout", function(d) {
+               div.style("opacity", 0);
+           })
+           .call(drag(simulation));
+
+
+       simulation.on("tick", () => {
+           link
+               .attr("x1", d => d.source.x)
+               .attr("y1", d => d.source.y)
+               .attr("x2", d => d.target.x)
+               .attr("y2", d => d.target.y);
+
+           node
+               .attr("cx", d => d.x)
+               .attr("cy", d => d.y);
+       });
+
+
+       //add zoom capabilities
+       let zoomHandler = d3.zoom()
+                           .on("zoom", zoomAction);
+
+       //Zoom functions
+       function zoomAction() {
+           g.attr("transform", `translate(${width / 2+ d3.event.transform.x}, ${height / 2+ d3.event.transform.y })` + "scale(" + d3.event.transform.k + ")");
+       }
+       zoomHandler(svg);
+   })
+   .catch(function(error) {
+       console.log(error)
+   });
+</script>
