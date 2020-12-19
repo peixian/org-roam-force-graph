@@ -5,7 +5,7 @@ import logging
 import json
 from cdlib.algorithms import leiden
 
-def load_from_db(path="/Users/peixian/code/org/org-roam.db"):
+def load_from_db(path="/Users/peixian/.emacs.d/org-roam.db"):
     logging.info(f"Loading from {path}")
     conn = sqlite3.connect(path)
     c = conn.cursor()
@@ -21,7 +21,7 @@ def load_from_db(path="/Users/peixian/code/org/org-roam.db"):
         if 'private' in file:
             continue
         if title:
-            title = title[2:-2]
+            title = title[1:-1]
             t[file] = title
         else:
             t[file] = file
@@ -35,6 +35,9 @@ def parse_links(links, titles):
     logging.info(f"Parsing links")
     l = []
     for file1, file2, kind, _ in links:
+        print(file1)
+        print(file2)
+
         if 'private' in file2 or 'private' in file2:
             continue
         file1_name = titles.get(file1)

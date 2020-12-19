@@ -3,67 +3,97 @@
 
 <head>
     <style>
-        div.tooltip {
-            position: absolute;
-            text-align: center;
-            padding: 2px;
-            font: 12px sans-serif;
-            background: lightsteelblue;
-            border: 0px;
-            border-radius: 8px;
-            pointer-events: none;
-        }
+     div.tooltip {
+         position: absolute;
+         text-align: center;
+         padding: 2px;
+         font: 12px sans-serif;
+         background: lightsteelblue;
+         border: 0px;
+         border-radius: 8px;
+         pointer-events: none;
+     }
+     h1 {
+         font-size: 1em;
+         width: 75%;
+         position: fixed;
+         left: 50%;
+         margin-left: -37.5%;
+     }
     </style>
 </head>
-<title></title>
+<title>عجفت الغور</title>
 
 <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" media="all" rel="stylesheet" />
+<h1>
+    Graph of all notes. Drag/pan/zoom, and click to navigate to a specific note.
+</h1>
+<body>
 
-<body></body>
-<script src="https://d3js.org/d3.v5.min.js"></script>
+</body>
+<script src="https://d3js.org/d3.v6.min.js"></script>
 <script>
+ const simulationDurationInMs = 20000; // 20 seconds
+
+
+ let startTime = Date.now();
+ let endTime = startTime + simulationDurationInMs;
+
  var div = d3.select("body").append("div")
              .attr("class", "tooltip")
              .style("opacity", 0);
-
- const scale = d3.scaleOrdinal(d3.schemeCategory10);
-
+ var scale = d3.scaleOrdinal(d3.schemeCategory10);
  d3.json("org-data.json")
    .then(function(data) {
-       console.log(data)
 
        function color(d) {
            return scale(d.group);
        }
 
-       function clicked(d) {
+       function clicked(event, d) {
            window.open(d.url);
        }
+
+              function fade(nodeOpacity, linkOpacity) {
+                  return (event, d) => {
+               node.style('stroke-opacity', function (o) {
+                   const thisOpacity = isConnected(d, o) ? 1 : nodeOpacity;
+                   this.setAttribute('fill-opacity', thisOpacity);
+                   return thisOpacity;
+               });
+
+               link.style('stroke-opacity', o => (o.source === d || o.target === d ? 1 : linkOpacity));
+
+           };
+       }
+
        var width = window.innerWidth,
            height = window.innerHeight;
        const links = data.links.map(d => Object.create(d));
        const nodes = data.nodes.map(d => Object.create(d));
 
        let simulation = d3.forceSimulation(nodes)
-                          .force("link", d3.forceLink(links).id(d => d.id).distance(0).strength(.5))
+                          .force("link", d3.forceLink(links).id(d => d.id).distance(0).strength(.25))
                           .force("charge", d3.forceManyBody().strength(-100))
                           .force("x", d3.forceX())
                           .force("y", d3.forceY());
 
+       simulation.force('link')
+                 .links(data.links);
        let drag = function(simulation) {
-           function dragstarted(d) {
-               if (!d3.event.active) simulation.alphaTarget(0.3).restart();
+           function dragstarted(event, d) {
+               if (!event.active) simulation.alphaTarget(0.3).restart();
                d.fx = d.x;
                d.fy = d.y;
            }
 
-           function dragged(d) {
-               d.fx = d3.event.x;
-               d.fy = d3.event.y;
+           function dragged(event, d) {
+               d.fx = event.x;
+               d.fy = event.y;
            }
 
-           function dragended(d) {
-               if (!d3.event.active) simulation.alphaTarget(0);
+           function dragended(event, d) {
+               if (!event.active) simulation.alphaTarget(0);
                d.fx = null;
                d.fy = null;
            }
@@ -74,6 +104,15 @@
                     .on("end", dragended);
        };
 
+
+       const linkedByIndex = {};
+       data.links.forEach(d => {
+           linkedByIndex[`${d.source.index},${d.target.index}`] = 1;
+       });
+
+       function isConnected(a, b) {
+           return linkedByIndex[`${a.index},${b.index}`] || linkedByIndex[`${b.index},${a.index}`] || a.index === b.index;
+       }
 
        // Building svg
        let svg = d3.select("body")
@@ -106,33 +145,40 @@
            .attr("r", 5)
            .attr("fill", color)
            .on("click", clicked)
-           .on("mouseover", function(d) {
+           .on("mouseover", function(event, d) {
                div.html(`<div style='float: right'>${d.id}</div>`)
                   .style("opacity", .9)
-                  .style('left', d3.event.pageX + 'px')
-                  .style('top', (d3.event.pageY - 28) + 'px')
+                  .style('left', event.pageX + 'px')
+                  .style('top', (event.pageY - 28) + 'px')
                   .style('border', 'solid 3px black')
                   .style('background-color', 'white')
                   .style('border-radius', '10px')
                   .style('float', 'left')
                   .style('font-family', 'monospace');
            })
-           .on("mouseout", function(d) {
+           .on('mouseover.fade', fade(0.1, 0.1))
+           .on("mouseout", function(event, d) {
                div.style("opacity", 0);
            })
-           .call(drag(simulation));
+           .on('mouseout.fade', fade(1, 0.6));
+           //.call(drag(simulation));
 
 
        simulation.on("tick", () => {
-           link
-               .attr("x1", d => d.source.x)
-               .attr("y1", d => d.source.y)
-               .attr("x2", d => d.target.x)
-               .attr("y2", d => d.target.y);
+           if (Date.now() < endTime) {
+               link
+                   .attr("x1", d => d.source.x)
+                   .attr("y1", d => d.source.y)
+                   .attr("x2", d => d.target.x)
+                   .attr("y2", d => d.target.y);
 
-           node
-               .attr("cx", d => d.x)
-               .attr("cy", d => d.y);
+               node
+                   .attr("cx", d => d.x)
+                   .attr("cy", d => d.y);
+           } else {
+               simulation.stop();
+           }
+
        });
 
 
@@ -141,8 +187,8 @@
                            .on("zoom", zoomAction);
 
        //Zoom functions
-       function zoomAction() {
-           g.attr("transform", `translate(${width / 2+ d3.event.transform.x}, ${height / 2+ d3.event.transform.y })` + "scale(" + d3.event.transform.k + ")");
+       function zoomAction(event, d) {
+           g.attr("transform", `translate(${width / 2+ event.transform.x}, ${height / 2+ event.transform.y })` + "scale(" + event.transform.k + ")");
        }
        zoomHandler(svg);
    })
