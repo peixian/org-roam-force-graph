@@ -1,0 +1,59 @@
+* D3 Force Diagram from Org-Roam DB
+
+Scripts to generate a json of nodes and links from ~org-roam.db~, and a basic html shim to display them.
+
+** Example:
+   https://wiki.space.af/graph.html
+   [[file:./example.png]]
+
+** Usage:
+
+*** Prereq's
+    You will need the ~networkx~ python library and the ~cdlib~ python libraries:
+    - https://networkx.org/documentation/stable/index.html
+    - https://cdlib.readthedocs.io/en/latest/
+
+    Both can be installed with ~pip install -r requirements.txt~.
+
+
+*** Generating the JSON and Viewing
+    By default running
+    #+begin_src sh
+      $> ./org-roam-d3.py && python3 -m http.server 9000
+    #+end_src
+
+    should generate a ~./org-data.json~ file in the current directory and start up a server. Open http://localhost:9000, and you should see your graph.
+
+    By default this searches under ~$HOME/.emacs.d/org-roam.db~. If you store the database in another location, you can use the --org-db-location flag.
+
+    The output location can be set with the ~--output~ flag. Note that the ~index.html~ file that is included with this repo is hardcoded to check for a file called ~org-data.json~ in the same directory, you will need to edit the HTML file if the output path is changed.
+
+*** Additional Features
+    ~org-roam-d3.py~ supports a few additional features, such as replacement to generate url links (if you host your notes on a webpage, for example).
+#+begin_src sh
+      $> ./org-roam-d3.py  --help
+      usage: org-roam-d3.py [-h] [--org-db-location DB_LOCATION]
+      [--output OUTPUT_LOCATION]
+      [--replace REPLACEMENTS [REPLACEMENTS ...]]
+
+      Generates a json file from your org-roam DB
+
+      optional arguments:
+      -h, --help            show this help message and exit
+      --org-db-location DB_LOCATION
+      Location of org-roam.db file. Defaults to
+      $HOME/.emacs.d/org-roam.db
+      --output OUTPUT_LOCATION, -o OUTPUT_LOCATION
+      File to output as. Defaults to './org-data.json'
+      --replace REPLACEMENTS [REPLACEMENTS ...]
+      Replacement to generate urls. Takes in <FILE_PATH>
+      <REPLACEMENT_VALUE>
+    #+end_src
+
+** Limitations
+   I have not tested this for:
+   - org roam graphs without a central node
+   - many other things
+
+** License
+   BSD 3 Clause. See the ~license~ file.
