@@ -3,6 +3,20 @@
 
 <head>
     <style>
+     #title {
+         position: fixed;
+         flex-direction: row;
+         display: flex;
+         align-items: center;
+     }
+
+     #title .subtitle {
+         margin: 5px 0 5px 20px;
+     }
+
+     #title .subtitle h2 {
+         margin: 5px 0;
+     }
      div.tooltip {
          position: absolute;
          text-align: center;
@@ -20,24 +34,36 @@
          left: 50%;
          margin-left: -37.5%;
      }
+
+
     </style>
 </head>
 <title>عجفت الغور</title>
 
 <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css" media="all" rel="stylesheet" />
-<h1>
-    Graph of all notes. Drag/pan/zoom, and click to navigate to a specific note.
-</h1>
+
+
+<div id="title">
+    <div class="subtitle">
+        <h2>Notes Graph</h2>
+        <small>Source on
+            <a href="https://github.com/peixian/org-roam-force-graph"
+            >GitHub</a
+                   ></small>
+    </div>
+</div>
+
 <body>
+
+    <div id="chart-container">
+        <div id="chart"></div>
+        <div id="loading"><span>loading...</span></div>
+    </div>
 
 </body>
 <script src="https://d3js.org/d3.v6.min.js"></script>
 <script>
- const simulationDurationInMs = 20000; // 20 seconds
 
-
- let startTime = Date.now();
- let endTime = startTime + simulationDurationInMs;
 
  var div = d3.select("body").append("div")
              .attr("class", "tooltip")
@@ -45,64 +71,58 @@
  var scale = d3.scaleOrdinal(d3.schemeCategory10);
  d3.json("org-data.json")
    .then(function(data) {
+       var width = window.innerWidth,
+           height = window.innerHeight;
 
        function color(d) {
            return scale(d.group);
+       }
+
+       function dx_source(d) {
+           console.log(d);
+           return d.source.x1 * width;
+       }
+
+       function dx_target(d) {
+           return d.target.x2 * width;
+       }
+
+       function dy_source(d) {
+           return d.y1 * height;
+       }
+
+       function dy_target(d) {
+           return d.y2 * height;
+       }
+
+       function dx(d) {
+           return d.x * width;
+       }
+
+       function dy(d) {
+           return d.y * height;
        }
 
        function clicked(event, d) {
            window.open(d.url);
        }
 
-              function fade(nodeOpacity, linkOpacity) {
-                  return (event, d) => {
+       function fade(nodeOpacity, linkOpacity) {
+           return (event, d) => {
                node.style('stroke-opacity', function (o) {
                    const thisOpacity = isConnected(d, o) ? 1 : nodeOpacity;
                    this.setAttribute('fill-opacity', thisOpacity);
                    return thisOpacity;
                });
 
-               link.style('stroke-opacity', o => (o.source === d || o.target === d ? 1 : linkOpacity));
+               link.style('stroke-opacity', o => (o.source === d.id || o.target === d.id ? 1 : linkOpacity));
 
            };
        }
 
-       var width = window.innerWidth,
-           height = window.innerHeight;
+
        const links = data.links.map(d => Object.create(d));
        const nodes = data.nodes.map(d => Object.create(d));
-
-       let simulation = d3.forceSimulation(nodes)
-                          .force("link", d3.forceLink(links).id(d => d.id).distance(0).strength(.25))
-                          .force("charge", d3.forceManyBody().strength(-100))
-                          .force("x", d3.forceX())
-                          .force("y", d3.forceY());
-
-       simulation.force('link')
-                 .links(data.links);
-       let drag = function(simulation) {
-           function dragstarted(event, d) {
-               if (!event.active) simulation.alphaTarget(0.3).restart();
-               d.fx = d.x;
-               d.fy = d.y;
-           }
-
-           function dragged(event, d) {
-               d.fx = event.x;
-               d.fy = event.y;
-           }
-
-           function dragended(event, d) {
-               if (!event.active) simulation.alphaTarget(0);
-               d.fx = null;
-               d.fy = null;
-           }
-
-           return d3.drag()
-                    .on("start", dragstarted)
-                    .on("drag", dragged)
-                    .on("end", dragended);
-       };
 
 
        const linkedByIndex = {};
@@ -115,7 +135,7 @@
        }
 
        // Building svg
-       let svg = d3.select("body")
+       let svg = d3.select("#chart")
                    .classed("svg-container", true)
                    .append("svg")
                    .attr("preserveAspectRatio", "xMinYMin meet")
@@ -133,6 +153,10 @@
                      .selectAll("line")
                      .data(links)
                      .join("line")
+                     .attr("x1", d => d.x1 * width)
+                     .attr("y1", d => d.y1 * height)
+                     .attr("x2", d => d.x2 * width)
+                     .attr("y2", d => d.y2 * height)
                      .attr("stroke-width", d => Math.sqrt(d.value));
 
 
@@ -143,6 +167,8 @@
            .data(nodes)
            .join("circle")
            .attr("r", 5)
+           .attr("cx", dx)
+           .attr("cy", dy)
            .attr("fill", color)
            .on("click", clicked)
            .on("mouseover", function(event, d) {
@@ -161,25 +187,6 @@
                div.style("opacity", 0);
            })
            .on('mouseout.fade', fade(1, 0.6));
-           //.call(drag(simulation));
-
-
-       simulation.on("tick", () => {
-           if (Date.now() < endTime) {
-               link
-                   .attr("x1", d => d.source.x)
-                   .attr("y1", d => d.source.y)
-                   .attr("x2", d => d.target.x)
-                   .attr("y2", d => d.target.y);
-
-               node
-                   .attr("cx", d => d.x)
-                   .attr("cy", d => d.y);
-           } else {
-               simulation.stop();
-           }
-
-       });
 
 
        //add zoom capabilities
