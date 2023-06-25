@@ -12,7 +12,7 @@ import numpy as np
 import subprocess
 import openai
 from collections import Counter
-
+import string
 
 """
 Loads the org-roam database from the given path, and selects the file, title, and id from the nodes table, and the source and dest from the links table.
@@ -29,16 +29,20 @@ def load_from_db(path):
     c.execute('SELECT source, dest FROM links')
     links = c.fetchall()
 
+    c.execute('SELECT file, title FROM files')
+    files = c.fetchall()
+
+    master_titles = {}
+    for filename, title in files:
+        master_titles[filename] = title
+
     t = {}
     id_to_file = {}
     for file, title, or_id in titles:
         if 'private' in file:
             continue
-        if title:
-            title = title[1:-1]
-            t[file] = title
-        else:
-            t[file] = file
+        title = master_titles[file][1:-1]
+        t[file] = title
         id_to_file[or_id] = file
 
     final_links = []
@@ -75,28 +79,33 @@ def parse_links(links, titles, top=None, replace_dict={}):
         #df = pd.DataFrame(l)
     return l
 
-def color_nodes(community_dictionary, links):
+def color_nodes(community_dictionary, titles, links):
     # community_dictionary is a mapping of 'title' -> 'community'
     nodes = {}
+
+    titles = {k[1:-1]: v for k, v in titles.items()}
     for link in links:
         source = link['source']
         target = link['target']
         if source not in nodes:
+            url = link['source_url']
             nodes[source] = {
-                'id': source,
-                'url': link['source_url'],
+                'id': titles[url],
+                'url': url,
                 'group': community_dictionary[source]
             }
         if target not in nodes:
+            url = link['target_url']
             nodes[target] = {
-                'id': target,
-                'url': link['target_url'],
+                'id': titles[url],
+                'url': url,
                 'group': community_dictionary[target]
             }
     return nodes
 
-def generate_community_colors(links, community_algo=leiden):
+def generate_community_colors(titles, links, community_algo=leiden):
     logging.info(f"Generating community colors with algorithm {community_algo}")
+
     G = nx.Graph()
     for link in links:
         source = link['source']
@@ -114,7 +123,7 @@ def generate_community_colors(links, community_algo=leiden):
         for note_name in com:
             community_sets[note_name] = i
 
-    nodes = color_nodes(community_sets, links)
+    nodes = color_nodes(community_sets, titles, links)
     return nodes, G
 
 def dump(nodes, links, groups, name):
@@ -222,7 +231,7 @@ def generate_group_names(nodes, links):
         )
         response.choices[0]["text"]
         res[str(group)] = {
-            "name": response.choices[0]["text"].strip(),
+            "name": response.choices[0]["text"].strip().translate(str.maketrans('', '', string.punctuation)),
             "central_node": central_node
         }
 
@@ -260,7 +269,7 @@ if __name__=="__main__":
         replacements = {}
     logging.info(f"Replacing according to {replacements}")
     links = parse_links(links, titles, args.top, replacements)
-    nodes, G = generate_community_colors(links)
+    nodes, G = generate_community_colors(titles, links)
     if args.umap:
         nodes = run_umap(nodes, links, name=args.output_location)
     else:
