@@ -17,7 +17,7 @@ Scripts to generate a json of nodes and links from ~org-roam.db~, and a basic ht
 
 
 *** Generating the JSON and Viewing
-    By default running
+    `docker build .` and by default running
     #+begin_src sh
       $> ./org-roam-d3.py && python3 -m http.server 9000
     #+end_src
@@ -29,27 +29,24 @@ Scripts to generate a json of nodes and links from ~org-roam.db~, and a basic ht
     The output location can be set with the ~--output~ flag. Note that the ~index.html~ file that is included with this repo is hardcoded to check for a file called ~org-data.json~ in the same directory, you will need to edit the HTML file if the output path is changed.
 
 *** Additional Features
-    ~org-roam-d3.py~ supports a few additional features, such as replacement to generate url links (if you host your notes on a webpage, for example).
-#+begin_src sh
-      $> ./org-roam-d3.py  --help
-      usage: org-roam-d3.py [-h] [--org-db-location DB_LOCATION]
-      [--output OUTPUT_LOCATION]
-      [--replace REPLACEMENTS [REPLACEMENTS ...]]
+    ~org-roam-d3.py~ supports a few additional features, such as replacement to generate url links (if you host your notes on a webpage, for example). It can also generate titles for communities, make sure to have an ~OPENAI_API_KEY~ set.
+    #+begin_src sh
+      usage: org-roam-d3.py [-h] [--org-db-location DB_LOCATION] [--output OUTPUT_LOCATION] [--replace REPLACEMENTS [REPLACEMENTS ...]] [--top TOP] [--generate-groups]
 
       Generates a json file from your org-roam DB
 
-      optional arguments:
-      -h, --help            show this help message and exit
-      --org-db-location DB_LOCATION
-      Location of org-roam.db file. Defaults to
-      $HOME/.emacs.d/org-roam.db
-      --output OUTPUT_LOCATION, -o OUTPUT_LOCATION
-      File to output as. Defaults to './org-data.json'
-      --replace REPLACEMENTS [REPLACEMENTS ...]
-      Replacement to generate urls. Takes in <FILE_PATH>
-      <REPLACEMENT_VALUE>
+      options:
+        -h, --help            show this help message and exit
+        --org-db-location DB_LOCATION
+                              Location of org-roam.db file. Defaults to $HOME/.emacs.d/org-roam.db
+        --output OUTPUT_LOCATION, -o OUTPUT_LOCATION
+                              File to output as. Defaults to './org-data.json'
+        --replace REPLACEMENTS [REPLACEMENTS ...]
+                              Replacement to generate urls. Takes in <FILE_PATH> <REPLACEMENT_VALUE>
+        --top TOP             Number of nodes to cut off by. Default is to generate all nodes
+        --generate-groups     Generate groups based on file name. Uses the titles of the top 64 nodes with the most edges to generate a prompt for OpenAI to generate a name for the group. `OPENAI_API_KEY` must be set as an environment
+                              variable.
     #+end_src
-
 ** Limitations
    I have not tested this for:
    - org roam graphs without a central node

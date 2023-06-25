@@ -244,7 +244,7 @@ if __name__=="__main__":
     parser.add_argument("--output", "-o", help="File to output as. Defaults to './org-data.json'", type=str, default="./org-data", dest="output_location")
     parser.add_argument("--replace", dest="replacements", nargs="+", help="Replacement to generate urls. Takes in <FILE_PATH> <REPLACEMENT_VALUE>")
     parser.add_argument("--top", default=None, dest="top", help="Number of nodes to cut off by. Default is to generate all nodes")
-    parser.add_argument("--generate-groups", default=False, action="store_true", dest="generate_groups", help="Generate groups based on file name")
+    parser.add_argument("--generate-groups", default=False, action="store_true", dest="generate_groups", help="Generate groups based on file name. Uses the titles of the top 64 nodes with the most edges to generate a prompt for OpenAI to generate a name for the group. `OPENAI_API_KEY` must be set as an environment variable.")
 
     args = parser.parse_args()
 
