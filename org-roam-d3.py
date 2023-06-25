@@ -11,6 +11,8 @@ import umap
 import numpy as np
 import subprocess
 import openai
+from collections import Counter
+
 
 """
 Loads the org-roam database from the given path, and selects the file, title, and id from the nodes table, and the source and dest from the links table.
@@ -197,9 +199,9 @@ def generate_group_names(nodes, links):
     df = pd.DataFrame(nodes.values())
     links_df = pd.DataFrame(links)
     links_df["count"] = 1
-    name_to_edges_count = links_df.groupby("source").sum()["count"].to_dict()
-    df["edge_counts"] = df["id"].apply(lambda x: name_to_edges_count.get(x, 1))
-
+    name_to_edges_count = Counter(links_df.groupby("source").sum()["count"].to_dict())
+    name_to_edges_count += Counter((links_df.groupby("target").sum()["count"].to_dict()))
+    df["edge_counts"] = df["id"].apply(lambda x: name_to_edges_count.get(x, 0))  
 
     def generate_prompt(df, group):
         df_sorted = df.sort_values("edge_counts", ascending=False)
