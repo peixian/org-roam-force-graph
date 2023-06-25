@@ -7,16 +7,15 @@ import argparse
 import pandas as pd
 from pathlib import Path
 from cdlib.algorithms import leiden
+import umap
+import numpy as np
+import subprocess
 
-import networkx as nx
-import sqlite3
-import logging
-import json
-import argparse
-import pandas as pd
-from pathlib import Path
-from cdlib.algorithms import leiden
+"""
+Loads the org-roam database from the given path, and selects the file, title, and id from the nodes table, and the source and dest from the links table.
 
+Output format is a tuple of (titles, links), where titles is a dictionary of file -> title, and links is a list of tuples of (source, dest)
+"""
 def load_from_db(path):
     logging.info(f"Loading from {path}")
     conn = sqlite3.connect(path)
@@ -118,23 +117,73 @@ def generate_community_colors(links, community_algo=leiden):
 def dump(nodes, links, name):
     logging.info(f"Writing json to {name}")
     output = {}
-
+    
     for cur_link in links:
         cur_link["x1"] = nodes[cur_link["source"]]['x']
         cur_link["y1"] = nodes[cur_link["source"]]['y']
         cur_link["x2"] = nodes[cur_link["target"]]['x']
         cur_link["y2"] = nodes[cur_link["target"]]['y']
-
+            
+            
     output['links'] = links
-
     output['nodes'] = list(nodes.values())
-    with open(name, 'w') as f:
+
+    with open(f"{name}.json", 'w') as f:
         json.dump(output, f)
 
+def run_umap(nodes, links, name="org-data"):
+    logging.info("Running dumping into node2vec format")
+    node2vec_edgelist = []
+
+    ids = range(1, len(nodes) + 1)
+    
+    node_to_id = dict(zip(nodes.keys(), ids))
+    id_to_node = dict(zip(ids, nodes.keys()))
+    for cur_link in links:
+        edge = f'{node_to_id[cur_link["source"]]} {node_to_id[cur_link["target"]]}'
+        node2vec_edgelist.append(edge)
+
+    with open(f"{name}.edgelist", 'w') as f:
+        f.write("\n".join(node2vec_edgelist))
+
+    logging.info(f"Running node2vec on {name}")
+    #node2vec -i:/workspace/org-data.edgelist  -o:/workspace/org-data.emb  -d:64 -l:40 -q:0.5
+    subprocess.run(["node2vec", f'-i:/workspace/{name}.edgelist', f"-o:/workspace/{name}.emb", "-d:64", "-l:40", "-q:0.5",])
+
+    logging.info(f"Running UMAP on {name}")
+    f = f"{name}.emb"
+    data = np.genfromtxt(f, delimiter=" ", skip_header=1)
+    mapper = umap.UMAP(spread=3.0, min_dist=0.5, n_neighbors=100)
+    u = mapper.fit_transform(data[:,1:])
+
+    x = u[:, 0]
+    y = u[:, 1]
+
+    # determine the minimum and maximum for x and y separately
+    min_x, max_x = np.min(x), np.max(x)
+    min_y, max_y = np.min(y), np.max(y)
+
+    # normalize x and y separately
+    x_normalized = (x - min_x) / (max_x - min_x)
+    y_normalized = (y - min_y) / (max_y - min_y)
+
+    # Recombine the normalized x and y into a single array
+    data_normalized = np.column_stack((x_normalized, y_normalized))
+
+    id_to_position = dict(zip(data[:, 0], data_normalized))
+
+    for key, value in id_to_position.items():
+        node_name = id_to_node[int(key)]
+        nodes[node_name]['num_id'] = int(key)
+        nodes[node_name]['x'] = str(value[0])
+        nodes[node_name]['y'] = str(value[1])
+    
+    return nodes
+    
 
 def generate_positions(G, nodes, iterations=50):
     logging.info(f"Generating and iterating through spring layout with iterations {iterations}")
-    pos = nx.spring_layout(G, iterations=iterations)
+    pos = nx.spring_layout(G, scale=2, k=0.1, iterations=iterations)
     for key, value in pos.items():
         if key in nodes:
             nodes[key]["x"] = value[0]
@@ -144,9 +193,11 @@ def generate_positions(G, nodes, iterations=50):
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description="Generates a json file from your org-roam DB")
     parser.add_argument("--org-db-location",  help="Location of org-roam.db file. Defaults to $HOME/.emacs.d/org-roam.db", type=str, default=f"{Path.home()}/.emacs.d/org-roam.db", dest="db_location")
-    parser.add_argument("--output", "-o", help="File to output as. Defaults to './org-data.json'", type=str, default="./org-data.json", dest="output_location")
+    parser.add_argument("--output", "-o", help="File to output as. Defaults to './org-data.json'", type=str, default="./org-data", dest="output_location")
     parser.add_argument("--replace", dest="replacements", nargs="+", help="Replacement to generate urls. Takes in <FILE_PATH> <REPLACEMENT_VALUE>")
     parser.add_argument("--top", default=None, dest="top", help="Number of nodes to cut off by. Default is to generate all nodes")
+    #parser.add_argument("--node2vec", default=True, action="store_true", dest="node2vec", help="Also output a node2vec edgelist")
+    parser.add_argument("--umap", default=False, action="store_true", dest="umap", help="Run umap and generate a node2vec edgelist")
 
     args = parser.parse_args()
 
@@ -159,14 +210,20 @@ if __name__=="__main__":
         ]
     )
 
-    if len(args.replacements) % 2 != 0:
+    if args.replacements and len(args.replacements) % 2 != 0:
         print("Replacements must be in pairs")
         exit(1)
     logging.info(f"Loading db from {args.db_location}")
     titles, links = load_from_db(path=args.db_location)
-    replacements = {args.replacements[i]: args.replacements[i+1] for i in range(0, len(args.replacements), 2)}
+    if args.replacements:
+        replacements = {args.replacements[i]: args.replacements[i+1] for i in range(0, len(args.replacements), 2)}
+    else:
+        replacements = {}
     logging.info(f"Replacing according to {replacements}")
     links = parse_links(links, titles, args.top, replacements)
     nodes, G = generate_community_colors(links)
-    nodes = generate_positions(G, nodes, iterations=200)
+    if args.umap:
+        nodes = run_umap(nodes, links, name=args.output_location)
+    else:
+        nodes = generate_positions(G, nodes, iterations=200)
     dump(nodes, links, name=args.output_location)
