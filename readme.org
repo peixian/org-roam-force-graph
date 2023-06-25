@@ -3,7 +3,7 @@
 Scripts to generate a json of nodes and links from ~org-roam.db~, and a basic html shim to display them.
 
 ** Example:
-   https://wiki.space.af/graph.html
+   https://wiki.malloc.dog/graph.html
    [[file:./example.png]]
 
 ** Usage:
