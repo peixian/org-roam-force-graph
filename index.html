@@ -112,6 +112,37 @@
             box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
             outline: none;
         }
+
+        #legend-container {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            background-color: rgba(255, 255, 255, 0.8);
+            /* white background with some transparency */
+            border-radius: 5px;
+            padding: 10px;
+            z-index: 100;
+            /* ensures it's above other elements */
+        }
+
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+            cursor: pointer;
+        }
+
+        .legend-item .dot {
+            width: 10px;
+            height: 10px;
+            margin-right: 5px;
+            border-radius: 50%;
+        }
+
+        .legend-item .name {
+            font-size: 14px;
+        }
     </style>
 </head>
 <title>عجفت الغور</title>
@@ -132,9 +163,10 @@
         <div id="search-results"></div>
     </div>
 
+    <div id="legend-container"></div>
+
     <div id="chart-container">
         <div id="chart"></div>
-        <div id="loading"><span>loading...</span></div>
     </div>
 
 </body>
@@ -264,7 +296,6 @@
                 };
             }
 
-
             function highlightNode(d) {
                 node.attr("opacity", o => isConnected(d, o) ? 1 : 0.1);
                 link.attr("stroke-opacity", o => (o.source === d || o.target === d) ? 1 : 0.1);
@@ -274,6 +305,7 @@
                 node.attr("opacity", 1);
                 link.attr("stroke-opacity", 0.1);
             }
+
 
             // Building svg
             let svg = d3.select("#chart")
@@ -285,14 +317,7 @@
 
             svg = svg.merge(svg);
 
-            // const zoom = d3.zoom()
-            //     .scaleExtent([1, 8])
-            //     .on("zoom", function (event) {
-            //         g.attr("transform", event.transform);
-            //     });
-
-
-                const zoom = d3.zoom()
+            const zoom = d3.zoom()
                 .scaleExtent([1, 8])
                 .on("zoom", function (event) {
                     g.attr("transform", event.transform);
@@ -303,6 +328,45 @@
                 });
 
             svg.call(zoom);
+
+
+            const groupInfo = data.groups;
+            console.log();
+            const legendContainer = d3.select("#legend-container");
+
+            const legend = legendContainer.selectAll('.legend-item')
+                .data(Object.entries(groupInfo))
+                .enter()
+                .append('div')
+                .attr('class', 'legend-item')
+                .on("mouseover", (event, [group, info]) => { 
+                    console.log(group, info)
+                    const centralNode = nodes.find(node => node.id === info.central_node);
+                    if (centralNode) {
+                        node.style('stroke-opacity', function (o) {
+                            const thisOpacity = isConnected(centralNode, o) ? 1 : 0.1;
+                            this.setAttribute('fill-opacity', thisOpacity);
+                            return thisOpacity;
+                        }); 
+
+                        link.style('stroke-opacity', o => (o.source === centralNode.id || o.target === centralNode.id ? 1 : 0.1));
+                    }
+                })
+                .on("click", (event, [group, info]) => { 
+                    console.log(group, info)
+                    const centralNode = nodes.find(node => node.id === info.central_node);
+                    if (centralNode) {
+                        zoomToNode(centralNode);
+                    }
+                });
+
+            legend.append('div')
+                .attr('class', 'dot')
+                .style('background-color', ([group, info]) => scale(group));
+
+            legend.append('div')
+                .attr('class', 'name')
+                .text(([group, info]) => info.name);
 
             let g = svg.append("g")
                 .attr("transform", `translate(${width / 2}, ${height / 2})`);
@@ -375,10 +439,8 @@
             searchInput.on("input", function () {
                 const inputValue = this.value.trim().toLowerCase();
 
-                // Step 3: When the input value changes, filter the nodes based on the input value and create a list of search results.
                 const searchResults = nodes.filter(node => node.id.toLowerCase().includes(inputValue));
 
-                // Step 4: Display the search results in a separate div.
                 const searchResultsDiv = d3.select("#search-results");
                 searchResultsDiv.selectAll("*").remove(); // Clear previous search results
                 const searchResultsList = searchResultsDiv.append("ul");
@@ -387,8 +449,8 @@
                     .enter()
                     .append("li")
                     .text(d => d.id)
-                    .on("mouseover", fade(0.1, 0.1)) // Step 5: Add event listeners to the search results that call the `fade()` function when the user mouses over or uses arrow keys to navigate over the result.
-                    .on("click", (event, d) => { // Step 6: When the user clicks on a search result, zoom to the node itself.
+                    .on("mouseover", fade(0.1, 0.1))
+                    .on("click", (event, d) => { 
                         const [x, y] = [dx(d), dy(d)];
                         fade(0.1, 0.1)
                         zoomToNode(d);
@@ -400,22 +462,12 @@
                 g.attr("transform", `translate(${width / 2 + transform.x}, ${height / 2 + transform.y})` + "scale(" + transform.k + ")");
             }
 
-            // let zoomHandler = d3.zoom()
-            //     .on("zoom", function (event) {
-            //         zoomAction(event.transform);
-            //     });
-
-
-
-                let zoomHandler = d3.zoom()
-    .on("zoom", function (event) {
-        zoomAction(event.transform);
-        // Adjust the node radius according to the zoom scale
-        node.attr("r", 5 / event.transform.k);
-    });
-
-zoomHandler(svg);
-
+            let zoomHandler = d3.zoom()
+                .on("zoom", function (event) {
+                    zoomAction(event.transform);
+                    // Adjust the node radius according to the zoom scale
+                    node.attr("r", 5 / event.transform.k);
+                });
 
             zoomHandler(svg);
         })

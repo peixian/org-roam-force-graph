@@ -4,7 +4,7 @@ RUN apt-get update && \
     apt-get install -y python3 python3-venv python3-pip fish cmake gcc
 
 RUN python3 -m venv /venv
-RUN source /venv/bin/activate && pip install networkx numpy pandas cdlib igraph leidenalg scikit-learn umap-learn numba
+RUN source /venv/bin/activate && pip install networkx numpy pandas cdlib igraph leidenalg scikit-learn umap-learn numba openai
 
 COPY . /workspace
 

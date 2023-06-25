@@ -10,6 +10,7 @@ from cdlib.algorithms import leiden
 import umap
 import numpy as np
 import subprocess
+import openai
 
 """
 Loads the org-roam database from the given path, and selects the file, title, and id from the nodes table, and the source and dest from the links table.
@@ -114,19 +115,20 @@ def generate_community_colors(links, community_algo=leiden):
     nodes = color_nodes(community_sets, links)
     return nodes, G
 
-def dump(nodes, links, name):
+def dump(nodes, links, groups, name):
     logging.info(f"Writing json to {name}")
     output = {}
-    
+
     for cur_link in links:
         cur_link["x1"] = nodes[cur_link["source"]]['x']
         cur_link["y1"] = nodes[cur_link["source"]]['y']
         cur_link["x2"] = nodes[cur_link["target"]]['x']
         cur_link["y2"] = nodes[cur_link["target"]]['y']
-            
-            
+
+
     output['links'] = links
     output['nodes'] = list(nodes.values())
+    output["groups"] = groups
 
     with open(f"{name}.json", 'w') as f:
         json.dump(output, f)
@@ -136,7 +138,7 @@ def run_umap(nodes, links, name="org-data"):
     node2vec_edgelist = []
 
     ids = range(1, len(nodes) + 1)
-    
+
     node_to_id = dict(zip(nodes.keys(), ids))
     id_to_node = dict(zip(ids, nodes.keys()))
     for cur_link in links:
@@ -177,9 +179,9 @@ def run_umap(nodes, links, name="org-data"):
         nodes[node_name]['num_id'] = int(key)
         nodes[node_name]['x'] = str(value[0])
         nodes[node_name]['y'] = str(value[1])
-    
+
     return nodes
-    
+
 
 def generate_positions(G, nodes, iterations=50):
     logging.info(f"Generating and iterating through spring layout with iterations {iterations}")
@@ -190,14 +192,49 @@ def generate_positions(G, nodes, iterations=50):
             nodes[key]["y"] = value[1]
     return nodes
 
+def generate_group_names(nodes, links):
+    logging.info("Generating group names")
+    df = pd.DataFrame(nodes.values())
+    links_df = pd.DataFrame(links)
+    links_df["count"] = 1
+    name_to_edges_count = links_df.groupby("source").sum()["count"].to_dict()
+    df["edge_counts"] = df["id"].apply(lambda x: name_to_edges_count.get(x, 1))
+
+
+    def generate_prompt(df, group):
+        df_sorted = df.sort_values("edge_counts", ascending=False)
+        df_sorted = df_sorted[df_sorted["group"] == group]
+        central_node = df_sorted["id"].iloc[0]
+        group_names = df_sorted["id"][:64].to_list()
+        prompt_start = "for the following list, generate a one to two word name for the entire category, that's clear without any punctuation, that I can use as a map legend: ["
+        prompt_start += ",".join(group_names)
+        prompt_start += "]"
+        return prompt_start, central_node
+
+    res = {}
+    for group in df["group"].unique():
+        test_prompt, central_node = generate_prompt(df, group)
+        response = openai.Completion.create(
+            model="text-davinci-003",
+            prompt=test_prompt
+        )
+        response.choices[0]["text"]
+        res[str(group)] = {
+            "name": response.choices[0]["text"].strip(),
+            "central_node": central_node
+        }
+
+    logging.info(f"Generated group names {res}")
+    return res
+
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description="Generates a json file from your org-roam DB")
     parser.add_argument("--org-db-location",  help="Location of org-roam.db file. Defaults to $HOME/.emacs.d/org-roam.db", type=str, default=f"{Path.home()}/.emacs.d/org-roam.db", dest="db_location")
     parser.add_argument("--output", "-o", help="File to output as. Defaults to './org-data.json'", type=str, default="./org-data", dest="output_location")
     parser.add_argument("--replace", dest="replacements", nargs="+", help="Replacement to generate urls. Takes in <FILE_PATH> <REPLACEMENT_VALUE>")
     parser.add_argument("--top", default=None, dest="top", help="Number of nodes to cut off by. Default is to generate all nodes")
-    #parser.add_argument("--node2vec", default=True, action="store_true", dest="node2vec", help="Also output a node2vec edgelist")
     parser.add_argument("--umap", default=False, action="store_true", dest="umap", help="Run umap and generate a node2vec edgelist")
+    parser.add_argument("--generate-groups", default=False, action="store_true", dest="generate_groups", help="Generate groups based on file name")
 
     args = parser.parse_args()
 
@@ -226,4 +263,9 @@ if __name__=="__main__":
         nodes = run_umap(nodes, links, name=args.output_location)
     else:
         nodes = generate_positions(G, nodes, iterations=200)
-    dump(nodes, links, name=args.output_location)
+
+    group_names = {}
+    if args.generate_groups:
+        group_names = generate_group_names(nodes, links)
+
+    dump(nodes, links, group_names, name=args.output_location)
