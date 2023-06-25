@@ -79,11 +79,11 @@ def parse_links(links, titles, top=None, replace_dict={}):
         #df = pd.DataFrame(l)
     return l
 
-def color_nodes(community_dictionary, titles, links):
+def color_nodes(community_dictionary, titles, links, replace_dict={}):
     # community_dictionary is a mapping of 'title' -> 'community'
     nodes = {}
 
-    titles = {k[1:-1]: v for k, v in titles.items()}
+    titles = {generate_url(k[1:-1], replace_dict): v for k, v in titles.items()}
     for link in links:
         source = link['source']
         target = link['target']
@@ -103,7 +103,7 @@ def color_nodes(community_dictionary, titles, links):
             }
     return nodes
 
-def generate_community_colors(titles, links, community_algo=leiden):
+def generate_community_colors(titles, links, replace_dict={}, community_algo=leiden):
     logging.info(f"Generating community colors with algorithm {community_algo}")
 
     G = nx.Graph()
@@ -123,7 +123,7 @@ def generate_community_colors(titles, links, community_algo=leiden):
         for note_name in com:
             community_sets[note_name] = i
 
-    nodes = color_nodes(community_sets, titles, links)
+    nodes = color_nodes(community_sets, titles, links, replace_dict)
     return nodes, G
 
 def dump(nodes, links, groups, name):
@@ -257,10 +257,12 @@ if __name__=="__main__":
             logging.StreamHandler()
         ]
     )
+    print(args)
 
     if args.replacements and len(args.replacements) % 2 != 0:
         print("Replacements must be in pairs")
         exit(1)
+
     logging.info(f"Loading db from {args.db_location}")
     titles, links = load_from_db(path=args.db_location)
     if args.replacements:
@@ -269,7 +271,7 @@ if __name__=="__main__":
         replacements = {}
     logging.info(f"Replacing according to {replacements}")
     links = parse_links(links, titles, args.top, replacements)
-    nodes, G = generate_community_colors(titles, links)
+    nodes, G = generate_community_colors(titles, links, replacements)
     if args.umap:
         nodes = run_umap(nodes, links, name=args.output_location)
     else:
