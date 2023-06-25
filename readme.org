@@ -4,7 +4,9 @@ Scripts to generate a json of nodes and links from ~org-roam.db~, and a basic ht
 
 ** Example:
    https://wiki.malloc.dog/graph.html
-   [[file:./example.png]]
+
+
+   [[file:./example-graph.png]]
 
 ** Usage:
 
