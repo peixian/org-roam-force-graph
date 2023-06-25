@@ -244,7 +244,6 @@ if __name__=="__main__":
     parser.add_argument("--output", "-o", help="File to output as. Defaults to './org-data.json'", type=str, default="./org-data", dest="output_location")
     parser.add_argument("--replace", dest="replacements", nargs="+", help="Replacement to generate urls. Takes in <FILE_PATH> <REPLACEMENT_VALUE>")
     parser.add_argument("--top", default=None, dest="top", help="Number of nodes to cut off by. Default is to generate all nodes")
-    parser.add_argument("--umap", default=False, action="store_true", dest="umap", help="Run umap and generate a node2vec edgelist")
     parser.add_argument("--generate-groups", default=False, action="store_true", dest="generate_groups", help="Generate groups based on file name")
 
     args = parser.parse_args()
@@ -272,10 +271,7 @@ if __name__=="__main__":
     logging.info(f"Replacing according to {replacements}")
     links = parse_links(links, titles, args.top, replacements)
     nodes, G = generate_community_colors(titles, links, replacements)
-    if args.umap:
-        nodes = run_umap(nodes, links, name=args.output_location)
-    else:
-        nodes = generate_positions(G, nodes, iterations=200)
+    nodes = generate_positions(G, nodes, iterations=200)
 
     group_names = {}
     if args.generate_groups:
